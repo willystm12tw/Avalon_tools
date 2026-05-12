@@ -50,9 +50,9 @@
     // ─────────────────────────────────────────────
     const AUDIO_PATHS = {
       A: "./audio/a.mp3",
-      B: "./audio/b.mp3",
-      C: "./audio/c.mp3",
-      D: "./audio/d.mp3",
+      B: "./audio/a.mp3",
+      C: "./audio/a.mp3",
+      D: "./audio/a.mp3",
     };
 
     // ─────────────────────────────────────────────
@@ -242,7 +242,7 @@
             <section style={{ width:"100%" }}>
               <p style={{ textAlign:"center", color:"#71717a", fontSize:10, letterSpacing:"0.2em", textTransform:"uppercase", marginBottom:12 }}>⚔ Select Configuration</p>
               <div style={{ display:"grid", gridTemplateColumns:"repeat(4,1fr)", gap:10 }}>
-                {["A","B","C","D"].map(key => {
+                {["5人","6人","7人","8人"].map(key => {
                   const isActive = activeBtn === key;
                   return (
                     <button

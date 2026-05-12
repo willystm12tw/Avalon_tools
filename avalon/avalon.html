@@ -1,0 +1,438 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
+  <title>Avalon Game Master</title>
+
+  <!-- Tailwind CSS CDN -->
+  <script src="https://cdn.tailwindcss.com"></script>
+
+  <!-- React & ReactDOM (UMD) -->
+  <script crossorigin src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
+  <script crossorigin src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
+
+  <!-- Babel (把 JSX 在瀏覽器裡即時轉譯) -->
+  <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+
+  <style>
+    * { -webkit-tap-highlight-color: transparent; box-sizing: border-box; }
+    body { margin: 0; background: #09090b; }
+    @keyframes fadeIn  { from { opacity: 0; } to { opacity: 1; } }
+    @keyframes popIn   { from { opacity: 0; transform: scale(0.75); } to { opacity: 1; transform: scale(1); } }
+    @keyframes popInSm { from { opacity: 0; transform: scale(0.8) translateX(-50%); } to { opacity: 1; transform: scale(1) translateX(-50%); } }
+    .anim-fade  { animation: fadeIn  0.25s ease; }
+    .anim-pop   { animation: popIn   0.35s cubic-bezier(0.34,1.56,0.64,1); }
+    .anim-popsm { animation: popInSm 0.18s cubic-bezier(0.34,1.56,0.64,1); }
+  </style>
+
+  <script>
+    // Tailwind 自訂設定
+    tailwind.config = {
+      theme: {
+        extend: {
+          fontFamily: { serif: ['Georgia', 'Times New Roman', 'serif'] }
+        }
+      }
+    }
+  </script>
+</head>
+<body>
+  <div id="root"></div>
+
+  <script type="text/babel">
+    const { useState, useEffect, useRef, useCallback } = React;
+
+    // ─────────────────────────────────────────────
+    //  🔊 音檔路徑設定（填入你的音檔路徑）
+    //  範例：同資料夾放 a.mp3 就填 "./a.mp3"
+    //        放在 audio 子資料夾就填 "./audio/a.mp3"
+    // ─────────────────────────────────────────────
+    const AUDIO_PATHS = {
+      A: "./audio/a.mp3",
+      B: "./audio/b.mp3",
+      C: "./audio/c.mp3",
+      D: "./audio/d.mp3",
+    };
+
+    // ─────────────────────────────────────────────
+    //  ⚙️ 人數配置
+    // ─────────────────────────────────────────────
+    const PLAYER_CONFIGS = {
+      A: [2, 3, 2, 3, 3],
+      B: [2, 3, 4, 3, 4],
+      C: [2, 3, 3, 4, 4],
+      D: [3, 4, 4, 5, 5],
+    };
+
+    const COLOR_STYLES = {
+      gray: { bg: "#52525b", border: "#a1a1aa", label: "—",  shadow: "none" },
+      red:  { bg: "#dc2626", border: "#f87171", label: "紅", shadow: "0 0 16px 4px rgba(239,68,68,0.5)" },
+      blue: { bg: "#2563eb", border: "#60a5fa", label: "藍", shadow: "0 0 16px 4px rgba(59,130,246,0.5)" },
+    };
+
+    const COLOR_OPTIONS = [
+      { key: "gray", label: "清除", bg: "#52525b", border: "#a1a1aa" },
+      { key: "red",  label: "紅方", bg: "#dc2626", border: "#f87171" },
+      { key: "blue", label: "藍方", bg: "#2563eb", border: "#60a5fa" },
+    ];
+
+    // ── 選色 Popover ──────────────────────────────
+    function ColorPicker({ cellIndex, currentColor, onSelect, onClose }) {
+      return (
+        <>
+          <div
+            style={{ position: "fixed", inset: 0, zIndex: 40 }}
+            onClick={onClose}
+          />
+          <div
+            className="anim-popsm"
+            style={{
+              position: "absolute",
+              bottom: "calc(100% + 10px)",
+              left: "50%",
+              transform: "translateX(-50%)",
+              zIndex: 50,
+              background: "#27272a",
+              border: "1px solid #52525b",
+              borderRadius: 12,
+              padding: 8,
+              display: "flex",
+              flexDirection: "column",
+              gap: 6,
+              minWidth: 90,
+              boxShadow: "0 8px 32px rgba(0,0,0,0.6)",
+            }}
+          >
+            {/* 下方箭頭 */}
+            <div style={{
+              position: "absolute", top: "100%", left: "50%", transform: "translateX(-50%)",
+              width: 0, height: 0,
+              borderLeft: "6px solid transparent",
+              borderRight: "6px solid transparent",
+              borderTop: "6px solid #52525b",
+            }} />
+
+            {COLOR_OPTIONS.map(({ key, label, bg, border }) => (
+              <button
+                key={key}
+                onClick={() => { onSelect(cellIndex, key); onClose(); }}
+                style={{
+                  display: "flex", alignItems: "center", gap: 8,
+                  padding: "8px 12px",
+                  borderRadius: 8,
+                  border: `2px solid ${border}`,
+                  background: bg,
+                  color: "#fff",
+                  fontSize: 13,
+                  fontWeight: 600,
+                  cursor: "pointer",
+                  opacity: currentColor === key ? 1 : 0.72,
+                  outline: currentColor === key ? "2px solid rgba(255,255,255,0.3)" : "none",
+                  outlineOffset: 1,
+                  minHeight: 40,
+                  fontFamily: "Georgia, serif",
+                }}
+              >
+                <span style={{
+                  width: 10, height: 10, borderRadius: "50%",
+                  background: "#fff", opacity: 0.7, flexShrink: 0,
+                }} />
+                {label}
+                {currentColor === key && (
+                  <span style={{ marginLeft: "auto", fontSize: 11, opacity: 0.7 }}>✓</span>
+                )}
+              </button>
+            ))}
+          </div>
+        </>
+      );
+    }
+
+    // ── 主元件 ────────────────────────────────────
+    function App() {
+      const [cells, setCells]               = useState(["gray","gray","gray","gray","gray"]);
+      const [playerConfig, setPlayerConfig] = useState(PLAYER_CONFIGS.A);
+      const [activeBtn, setActiveBtn]       = useState("A");
+      const [winner, setWinner]             = useState(null);
+      const [openPickerIndex, setOpenPickerIndex] = useState(null);
+      const [animKey, setAnimKey]           = useState(0);
+      const audioRef                        = useRef(null);
+
+      // 勝負偵測
+      useEffect(() => {
+        if (winner) return;
+        const r = cells.filter(c => c === "red").length;
+        const b = cells.filter(c => c === "blue").length;
+        if (r >= 3) setWinner("red");
+        else if (b >= 3) setWinner("blue");
+      }, [cells, winner]);
+
+      const playAudio = useCallback((path) => {
+        if (audioRef.current) audioRef.current.pause();
+        const a = new Audio(path);
+        audioRef.current = a;
+        a.play().catch(() => {});
+      }, []);
+
+      const handleButtonClick = useCallback((key) => {
+        setActiveBtn(key);
+        setPlayerConfig(PLAYER_CONFIGS[key]);
+        playAudio(AUDIO_PATHS[key]);
+        setOpenPickerIndex(null);
+      }, [playAudio]);
+
+      const handleCellClick = useCallback((i) => {
+        if (winner) return;
+        setOpenPickerIndex(prev => prev === i ? null : i);
+      }, [winner]);
+
+      const handleColorSelect = useCallback((i, color) => {
+        setCells(prev => { const n=[...prev]; n[i]=color; return n; });
+      }, []);
+
+      const handleReset = useCallback(() => {
+        setCells(["gray","gray","gray","gray","gray"]);
+        setPlayerConfig(PLAYER_CONFIGS[activeBtn]);
+        setWinner(null);
+        setOpenPickerIndex(null);
+        setAnimKey(k => k+1);
+      }, [activeBtn]);
+
+      const redCount  = cells.filter(c => c === "red").length;
+      const blueCount = cells.filter(c => c === "blue").length;
+
+      return (
+        <div style={{ minHeight:"100vh", background:"#09090b", color:"#f4f4f5", fontFamily:"Georgia,serif", display:"flex", flexDirection:"column", alignItems:"center", overflowX:"hidden", position:"relative" }}>
+
+          {/* 背景格線 */}
+          <div style={{
+            pointerEvents:"none", position:"fixed", inset:0, opacity:0.03,
+            backgroundImage:"repeating-linear-gradient(0deg,transparent,transparent 39px,rgba(255,215,0,0.4) 40px),repeating-linear-gradient(90deg,transparent,transparent 39px,rgba(255,215,0,0.4) 40px)"
+          }} />
+          {/* 頂部光暈 */}
+          <div style={{
+            pointerEvents:"none", position:"fixed", top:0, left:"50%", transform:"translateX(-50%)",
+            width:288, height:160, background:"rgba(245,158,11,0.1)", filter:"blur(60px)", borderRadius:"50%"
+          }} />
+
+          {/* ── 標題 ── */}
+          <header style={{ width:"100%", display:"flex", flexDirection:"column", alignItems:"center", paddingTop:32, paddingBottom:16, position:"relative", zIndex:10 }}>
+            <div style={{ display:"flex", alignItems:"center", gap:10, marginBottom:4 }}>
+              <span style={{ color:"#fbbf24", fontSize:24 }}>♛</span>
+              <h1 style={{
+                fontSize: 48, fontWeight: 700, letterSpacing: "0.2em", textTransform:"uppercase", margin:0,
+                background: "linear-gradient(135deg,#fbbf24 0%,#f59e0b 45%,#d97706 75%,#fbbf24 100%)",
+                WebkitBackgroundClip: "text", WebkitTextFillColor: "transparent",
+                filter: "drop-shadow(0 0 10px rgba(251,191,36,0.35))",
+              }}>Avalon</h1>
+              <span style={{ color:"#fbbf24", fontSize:24 }}>♛</span>
+            </div>
+            <p style={{ color:"#71717a", fontSize:10, letterSpacing:"0.3em", textTransform:"uppercase", margin:0 }}>Game Master Console</p>
+            <div style={{ display:"flex", alignItems:"center", gap:8, marginTop:12, width:192 }}>
+              <div style={{ flex:1, height:1, background:"linear-gradient(to right,transparent,rgba(245,158,11,0.4))" }} />
+              <span style={{ color:"rgba(180,120,30,0.5)", fontSize:14 }}>⚔</span>
+              <div style={{ flex:1, height:1, background:"linear-gradient(to left,transparent,rgba(245,158,11,0.4))" }} />
+            </div>
+          </header>
+
+          <main style={{ width:"100%", maxWidth:420, padding:"0 16px", display:"flex", flexDirection:"column", alignItems:"center", gap:28, position:"relative", zIndex:10, paddingBottom:48 }}>
+
+            {/* ── 按鈕區 A/B/C/D ── */}
+            <section style={{ width:"100%" }}>
+              <p style={{ textAlign:"center", color:"#71717a", fontSize:10, letterSpacing:"0.2em", textTransform:"uppercase", marginBottom:12 }}>⚔ Select Configuration</p>
+              <div style={{ display:"grid", gridTemplateColumns:"repeat(4,1fr)", gap:10 }}>
+                {["A","B","C","D"].map(key => {
+                  const isActive = activeBtn === key;
+                  return (
+                    <button
+                      key={key}
+                      onClick={() => handleButtonClick(key)}
+                      style={{
+                        position:"relative", display:"flex", flexDirection:"column",
+                        alignItems:"center", justifyContent:"center",
+                        height:72, borderRadius:12,
+                        border: isActive ? "2px solid #fbbf24" : "2px solid #3f3f46",
+                        background: isActive ? "rgba(120,53,15,0.3)" : "rgba(24,24,27,0.8)",
+                        color: isActive ? "#fde68a" : "#a1a1aa",
+                        fontSize:24, fontWeight:700, letterSpacing:"0.1em",
+                        cursor:"pointer", fontFamily:"Georgia,serif",
+                        boxShadow: isActive ? "0 0 20px 3px rgba(251,191,36,0.2)" : "none",
+                        transition:"all 0.2s",
+                        WebkitTapHighlightColor: "transparent",
+                      }}
+                    >
+                      <span style={{ fontSize:14, marginBottom:2, opacity: isActive ? 1 : 0.4 }}>🛡</span>
+                      {key}
+                      {isActive && (
+                        <span style={{
+                          position:"absolute", top:0, left:12, right:12, height:1,
+                          background:"linear-gradient(to right,transparent,rgba(251,191,36,0.6),transparent)"
+                        }} />
+                      )}
+                    </button>
+                  );
+                })}
+              </div>
+            </section>
+
+            {/* ── 計分板 ── */}
+            <section style={{ width:"100%" }}>
+              <p style={{ textAlign:"center", color:"#71717a", fontSize:10, letterSpacing:"0.2em", textTransform:"uppercase", marginBottom:12 }}>⚜ Scoreboard</p>
+
+              <div style={{ borderRadius:16, border:"1px solid rgba(63,63,70,0.8)", background:"rgba(24,24,27,0.6)", overflow:"hidden", boxShadow:"0 0 30px rgba(0,0,0,0.5)" }}>
+
+                {/* 第一列：編號 */}
+                <div style={{ display:"grid", gridTemplateColumns:"repeat(5,1fr)", borderBottom:"1px solid rgba(63,63,70,0.5)" }}>
+                  {[1,2,3,4,5].map(n => (
+                    <div key={n} style={{ padding:"10px 0", textAlign:"center", color:"rgba(251,191,36,0.8)", fontWeight:700, fontSize:16, letterSpacing:"0.2em", borderRight: n<5?"1px solid rgba(63,63,70,0.4)":"none" }}>{n}</div>
+                  ))}
+                </div>
+
+                {/* 第二列：人數 */}
+                <div style={{ display:"grid", gridTemplateColumns:"repeat(5,1fr)", borderBottom:"1px solid rgba(63,63,70,0.5)", background:"rgba(39,39,42,0.3)" }}>
+                  {playerConfig.map((count, i) => (
+                    <div key={i} style={{ padding:"8px 0", textAlign:"center", borderRight: i<4?"1px solid rgba(63,63,70,0.4)":"none", transition:"all 0.3s" }}>
+                      <span style={{ color:"#e4e4e7", fontWeight:500, fontSize:14 }}>{count}</span>
+                      <span style={{ color:"#71717a", fontSize:12 }}>人</span>
+                    </div>
+                  ))}
+                </div>
+
+                {/* 第三列：顏色格子 */}
+                <div style={{ display:"grid", gridTemplateColumns:"repeat(5,1fr)", padding:12, gap:8 }}>
+                  {cells.map((color, i) => {
+                    const s = COLOR_STYLES[color];
+                    const isOpen = openPickerIndex === i;
+                    return (
+                      <div key={`${animKey}-${i}`} style={{ position:"relative", display:"flex", justifyContent:"center" }}>
+                        <button
+                          onClick={() => handleCellClick(i)}
+                          disabled={!!winner}
+                          style={{
+                            width:"100%", aspectRatio:"1/1", minHeight:52,
+                            borderRadius:12, border:`2px solid ${s.border}`,
+                            background: s.bg, color:"rgba(255,255,255,0.8)",
+                            fontSize:12, fontWeight:700, cursor: winner ? "not-allowed" : "pointer",
+                            boxShadow: isOpen ? `${s.shadow}, 0 0 0 3px rgba(251,191,36,0.6)` : s.shadow,
+                            transform: isOpen ? "scale(1.08)" : "scale(1)",
+                            opacity: winner ? 0.6 : 1,
+                            transition:"all 0.2s",
+                            fontFamily:"Georgia,serif",
+                            WebkitTapHighlightColor:"transparent",
+                          }}
+                        >
+                          {s.label}
+                        </button>
+
+                        {isOpen && (
+                          <ColorPicker
+                            cellIndex={i}
+                            currentColor={color}
+                            onSelect={handleColorSelect}
+                            onClose={() => setOpenPickerIndex(null)}
+                          />
+                        )}
+                      </div>
+                    );
+                  })}
+                </div>
+
+                {/* 底部計數 */}
+                <div style={{ display:"flex", justifyContent:"center", gap:24, padding:"10px 0", background:"rgba(39,39,42,0.2)", borderTop:"1px solid rgba(63,63,70,0.4)" }}>
+                  <div style={{ display:"flex", alignItems:"center", gap:6, fontSize:14 }}>
+                    <span style={{ width:10, height:10, borderRadius:"50%", background:"#ef4444", display:"inline-block" }} />
+                    <span style={{ color:"#a1a1aa" }}>紅：<span style={{ color:"#f87171", fontWeight:700 }}>{redCount}</span></span>
+                  </div>
+                  <div style={{ width:1, background:"#3f3f46" }} />
+                  <div style={{ display:"flex", alignItems:"center", gap:6, fontSize:14 }}>
+                    <span style={{ width:10, height:10, borderRadius:"50%", background:"#3b82f6", display:"inline-block" }} />
+                    <span style={{ color:"#a1a1aa" }}>藍：<span style={{ color:"#60a5fa", fontWeight:700 }}>{blueCount}</span></span>
+                  </div>
+                </div>
+              </div>
+
+              <p style={{ color:"#52525b", fontSize:10, textAlign:"center", marginTop:8, letterSpacing:"0.05em" }}>
+                點擊格子選擇顏色 · 達到 3 格判定勝負
+              </p>
+            </section>
+          </main>
+
+          {/* ── 勝利彈窗 ── */}
+          {winner && (
+            <div
+              className="anim-fade"
+              style={{
+                position:"fixed", inset:0, zIndex:50,
+                display:"flex", alignItems:"center", justifyContent:"center",
+                background:"rgba(0,0,0,0.75)", backdropFilter:"blur(4px)",
+                padding:"0 24px",
+              }}
+            >
+              <div
+                className="anim-pop"
+                style={{
+                  position:"relative", display:"flex", flexDirection:"column", alignItems:"center",
+                  gap:20, padding:"36px 32px", borderRadius:16,
+                  border: `2px solid ${winner==="red"?"#ef4444":"#3b82f6"}`,
+                  background:"#18181b", width:"100%", maxWidth:300,
+                  boxShadow: winner==="red"
+                    ? "0 0 50px rgba(239,68,68,0.35)"
+                    : "0 0 50px rgba(59,130,246,0.35)",
+                }}
+              >
+                {/* 頂部色條 */}
+                <div style={{
+                  position:"absolute", top:0, left:"50%", transform:"translateX(-50%)",
+                  width:144, height:4, borderRadius:"0 0 4px 4px",
+                  background: winner==="red"?"#ef4444":"#3b82f6",
+                }} />
+
+                {/* 皇冠 */}
+                <div style={{
+                  fontSize:56,
+                  filter: `drop-shadow(0 0 12px ${winner==="red"?"rgba(239,68,68,0.7)":"rgba(59,130,246,0.7)"})`,
+                }}>♛</div>
+
+                <div style={{ textAlign:"center" }}>
+                  <p style={{ color:"#71717a", fontSize:10, letterSpacing:"0.3em", textTransform:"uppercase", margin:"0 0 6px" }}>Victory</p>
+                  <h2 style={{
+                    fontSize:28, fontWeight:700, letterSpacing:"0.05em", margin:0,
+                    color: winner==="red"?"#f87171":"#60a5fa",
+                  }}>
+                    {winner==="red" ? "紅方勝利！！！" : "藍方勝利！！！"}
+                  </h2>
+                </div>
+
+                <div style={{
+                  width:96, height:1,
+                  background: winner==="red"
+                    ? "linear-gradient(to right,transparent,#ef4444,transparent)"
+                    : "linear-gradient(to right,transparent,#3b82f6,transparent)",
+                }} />
+
+                <button
+                  onClick={handleReset}
+                  style={{
+                    display:"flex", alignItems:"center", gap:8,
+                    padding:"12px 28px", borderRadius:12,
+                    border:"1px solid #52525b", background:"#27272a",
+                    color:"#e4e4e7", fontSize:15, fontWeight:500,
+                    letterSpacing:"0.1em", cursor:"pointer", fontFamily:"Georgia,serif",
+                    minHeight:48, transition:"all 0.2s",
+                    WebkitTapHighlightColor:"transparent",
+                  }}
+                >
+                  ↺ 重新開始
+                </button>
+              </div>
+            </div>
+          )}
+        </div>
+      );
+    }
+
+    ReactDOM.createRoot(document.getElementById("root")).render(<App />);
+  </script>
+</body>
+</html>

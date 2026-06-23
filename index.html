@@ -102,9 +102,7 @@
       const [animKey, setAnimKey] = useState(0);
       const audioRef = useRef(null);
 
-      const [players, setPlayers] = useState(() => {
-        const saved = localStorage.getItem("avalon_players");
-        return saved ? JSON.parse(saved) : DEFAULT_PLAYERS;
+      const [players, setPlayers] = useState([]);
       });
       const [showSettings, setShowSettings] = useState(false);
       const [newPlayerName, setNewPlayerName] = useState("");
@@ -131,8 +129,17 @@
       }, [cells, winner]);
 
       useEffect(() => {
-        localStorage.setItem("avalon_players", JSON.stringify(players));
-      }, [players]);
+        const unsub = db.collection("settings").doc("game_config").onSnapshot((doc) => {
+          if (doc.exists) {
+            setPlayers(doc.data().players);
+          } else {
+            // 第一次執行時，將預設名單存入 Firebase
+            setPlayers(DEFAULT_PLAYERS);
+            db.collection("settings").doc("game_config").set({ players: DEFAULT_PLAYERS });
+          }
+        });
+        return () => unsub();
+      }, []);
 
       const playAudio = useCallback((path) => {
         if (audioRef.current) audioRef.current.pause();
@@ -177,15 +184,18 @@
       const addPlayer = () => {
         if (!newPlayerName.trim()) return;
         if (players.includes(newPlayerName.trim())) { alert("玩家名字已存在！"); return; }
-        setPlayers([...players, newPlayerName.trim()]);
+        
+        const updatedPlayers = [...players, newPlayerName.trim()];
+        db.collection("settings").doc("game_config").update({ players: updatedPlayers });
         setNewPlayerName("");
       };
 
-      const deletePlayer = (name) => {
-        if (confirm(`確定要刪除 ${name} 嗎？`)) {
-          setPlayers(players.filter(p => p !== name));
-        }
-      };
+        const deletePlayer = (name) => {
+          if (confirm(`確定要刪除 ${name} 嗎？`)) {
+            const updatedPlayers = players.filter(p => p !== name);
+            db.collection("settings").doc("game_config").update({ players: updatedPlayers });
+          }
+        };
 
       const fetchHistory = async () => {
         setLoadingStats(true);

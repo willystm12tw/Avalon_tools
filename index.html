@@ -10,106 +10,78 @@
   <script crossorigin src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
   <script src="https://unpkg.com/@babel/standalone@7.23.9/babel.min.js"></script>
 
+  <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-app-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore-compat.js"></script>
+
   <style>
     * { -webkit-tap-highlight-color: transparent; box-sizing: border-box; }
-    body { margin: 0; background: #09090b; }
+    body { margin: 0; background: #09090b; color: #f4f4f5; }
     @keyframes fadeIn  { from { opacity: 0; } to { opacity: 1; } }
     @keyframes popIn   { from { opacity: 0; transform: scale(0.75); } to { opacity: 1; transform: scale(1); } }
     @keyframes popInSm { from { opacity: 0; transform: scale(0.8) translateX(-50%); } to { opacity: 1; transform: scale(1) translateX(-50%); } }
     .anim-fade  { animation: fadeIn  0.25s ease; }
     .anim-pop   { animation: popIn   0.35s cubic-bezier(0.34,1.56,0.64,1); }
     .anim-popsm { animation: popInSm 0.18s cubic-bezier(0.34,1.56,0.64,1); }
+    .no-scrollbar::-webkit-scrollbar { display: none; }
+    .no-scrollbar { -ms-overflow-style: none; scrollbar-width: none; }
   </style>
 </head>
 <body>
   <div id="root"></div>
 
   <script type="text/babel">
-    const { useState, useEffect, useRef, useCallback } = React;
-
-    // ─────────────────────────────────────────────
-    //  🔊 音檔路徑（填入你的音檔路徑）
-    // ─────────────────────────────────────────────
-    const AUDIO_PATHS = {
-      A: "./audio/a.mp3",
-      B: "./audio/a.mp3",
-      C: "./audio/a.mp3",
-      D: "./audio/a.mp3",
+    const firebaseConfig = {
+      apiKey: "AIzaSyCPj5TIWv3-P-xdG8kUkvLNLZaWnF_L34w",
+      authDomain: "avalonstorage-6d3a4.firebaseapp.com",
+      databaseURL: "https://avalonstorage-6d3a4-default-rtdb.firebaseio.com",
+      projectId: "avalonstorage-6d3a4",
+      storageBucket: "avalonstorage-6d3a4.firebasestorage.app",
+      messagingSenderId: "403024640922",
+      appId: "1:403024640922:web:f92be4fa72190b43e85823",
+      measurementId: "G-HFL9K556KZ"
     };
 
-    // ─────────────────────────────────────────────
-    //  🎮 按鈕設定
-    //  key   → 內部識別用，不要改（A/B/C/D）
-    //  label → 按鈕上顯示的文字，隨意改！
-    // ─────────────────────────────────────────────
+    firebase.initializeApp(firebaseConfig);
+    const db = firebase.firestore();
+
+    const { useState, useEffect, useRef, useCallback } = React;
+
+    const AUDIO_PATHS = { A: "./audio/a.mp3", B: "./audio/a.mp3", C: "./audio/a.mp3", D: "./audio/a.mp3" };
     const BUTTONS = [
       { key: "A", label: "5人" },
       { key: "B", label: "6人" },
       { key: "C", label: "7人" },
       { key: "D", label: "8人" },
     ];
+    const PLAYER_CONFIGS = { A: [2, 3, 2, 3, 3], B: [2, 3, 4, 3, 4], C: [2, 3, 3, 4, 4], D: [3, 4, 4, 5, 5] };
 
-    // ─────────────────────────────────────────────
-    //  ⚙️ 人數配置（對應 A/B/C/D）
-    // ─────────────────────────────────────────────
-    const PLAYER_CONFIGS = {
-      A: [2, 3, 2, 3, 3],
-      B: [2, 3, 4, 3, 4],
-      C: [2, 3, 3, 4, 4],
-      D: [3, 4, 4, 5, 5],
-    };
-
-    // ─────────────────────────────────────────────
-    //  樣式 & 選色設定（不需要改）
-    // ─────────────────────────────────────────────
     const COLOR_STYLES = {
       gray: { bg: "#52525b", border: "#a1a1aa", label: "—",  shadow: "none" },
-      red:  { bg: "#dc2626", border: "#f87171", label: "紅", shadow: "0 0 16px 4px rgba(239,68,68,0.5)" },
-      blue: { bg: "#2563eb", border: "#60a5fa", label: "藍", shadow: "0 0 16px 4px rgba(59,130,246,0.5)" },
+      red:  { bg: "#dc2626", border: "#f87171", label: "壞", shadow: "0 0 16px 4px rgba(239,68,68,0.5)" }, 
+      blue: { bg: "#2563eb", border: "#60a5fa", label: "好", shadow: "0 0 16px 4px rgba(59,130,246,0.5)" }, 
     };
 
     const COLOR_OPTIONS = [
       { key: "gray", label: "清除", bg: "#52525b", border: "#a1a1aa" },
-      { key: "red",  label: "紅方", bg: "#dc2626", border: "#f87171" },
-      { key: "blue", label: "藍方", bg: "#2563eb", border: "#60a5fa" },
+      { key: "red",  label: "壞人", bg: "#dc2626", border: "#f87171" },
+      { key: "blue", label: "好人", bg: "#2563eb", border: "#60a5fa" },
     ];
 
-    // ── 選色 Popover ──────────────────────────────
+    const ROLES = {
+      good: ["梅林", "派西維爾", "平民", "藍蘭斯"],
+      bad: ["莫德雷德", "魔甘娜", "刺客", "紅藍斯", "奧伯倫", "爪牙"]
+    };
+    const ALL_ROLES = ["X", ...ROLES.good, ...ROLES.bad];
+    const DEFAULT_PLAYERS = ["William", "Jason", "Howard", "Wayne", "Ryan", "Charlin", "Yuci", "Jay", "Tony", "Len", "Lewis"];
+
     function ColorPicker({ cellIndex, currentColor, onSelect, onClose }) {
       return (
         <>
           <div style={{ position: "fixed", inset: 0, zIndex: 40 }} onClick={onClose} />
-          <div
-            className="anim-popsm"
-            style={{
-              position: "absolute", bottom: "calc(100% + 10px)", left: "50%",
-              transform: "translateX(-50%)", zIndex: 50,
-              background: "#27272a", border: "1px solid #52525b", borderRadius: 12,
-              padding: 8, display: "flex", flexDirection: "column", gap: 6,
-              minWidth: 90, boxShadow: "0 8px 32px rgba(0,0,0,0.6)",
-            }}
-          >
-            <div style={{
-              position: "absolute", top: "100%", left: "50%", transform: "translateX(-50%)",
-              width: 0, height: 0,
-              borderLeft: "6px solid transparent", borderRight: "6px solid transparent",
-              borderTop: "6px solid #52525b",
-            }} />
+          <div className="anim-popsm" style={{ position: "absolute", bottom: "calc(100% + 10px)", left: "50%", transform: "translateX(-50%)", zIndex: 50, background: "#27272a", border: "1px solid #52525b", borderRadius: 12, padding: 8, display: "flex", flexDirection: "column", gap: 6, minWidth: 90, boxShadow: "0 8px 32px rgba(0,0,0,0.6)" }}>
+            <div style={{ position: "absolute", top: "100%", left: "50%", transform: "translateX(-50%)", width: 0, height: 0, borderLeft: "6px solid transparent", borderRight: "6px solid transparent", borderTop: "6px solid #52525b" }} />
             {COLOR_OPTIONS.map(({ key, label, bg, border }) => (
-              <button
-                key={key}
-                onClick={() => { onSelect(cellIndex, key); onClose(); }}
-                style={{
-                  display: "flex", alignItems: "center", gap: 8,
-                  padding: "8px 12px", borderRadius: 8,
-                  border: `2px solid ${border}`, background: bg,
-                  color: "#fff", fontSize: 13, fontWeight: 600,
-                  cursor: "pointer", minHeight: 40, fontFamily: "Georgia, serif",
-                  opacity: currentColor === key ? 1 : 0.72,
-                  outline: currentColor === key ? "2px solid rgba(255,255,255,0.3)" : "none",
-                  outlineOffset: 1,
-                }}
-              >
+              <button key={key} onClick={() => { onSelect(cellIndex, key); onClose(); }} style={{ display: "flex", alignItems: "center", gap: 8, padding: "8px 12px", borderRadius: 8, border: `2px solid ${border}`, background: bg, color: "#fff", fontSize: 13, fontWeight: 600, cursor: "pointer", minHeight: 40, opacity: currentColor === key ? 1 : 0.72 }}>
                 <span style={{ width: 10, height: 10, borderRadius: "50%", background: "#fff", opacity: 0.7, flexShrink: 0 }} />
                 {label}
                 {currentColor === key && <span style={{ marginLeft: "auto", fontSize: 11, opacity: 0.7 }}>✓</span>}
@@ -120,24 +92,47 @@
       );
     }
 
-    // ── 主元件 ────────────────────────────────────
     function App() {
-      const [cells, setCells]                     = useState(["gray","gray","gray","gray","gray"]);
-      const [playerConfig, setPlayerConfig]       = useState(PLAYER_CONFIGS.A);
-      const [activeKey, setActiveKey]             = useState("A");
-      const [winner, setWinner]                   = useState(null);
+      const [cells, setCells] = useState(["gray","gray","gray","gray","gray"]);
+      const [shifts, setShifts] = useState([false, false, false, false, false]); 
+      const [playerConfig, setPlayerConfig] = useState(PLAYER_CONFIGS.A);
+      const [activeKey, setActiveKey] = useState("A");
+      const [winner, setWinner] = useState(null); 
       const [openPickerIndex, setOpenPickerIndex] = useState(null);
-      const [animKey, setAnimKey]                 = useState(0);
-      const audioRef                              = useRef(null);
+      const [animKey, setAnimKey] = useState(0);
+      const audioRef = useRef(null);
 
-      // 勝負偵測
+      const [players, setPlayers] = useState(() => {
+        const saved = localStorage.getItem("avalon_players");
+        return saved ? JSON.parse(saved) : DEFAULT_PLAYERS;
+      });
+      const [showSettings, setShowSettings] = useState(false);
+      const [newPlayerName, setNewPlayerName] = useState("");
+      const [showStats, setShowStats] = useState(false);
+      const [statsTab, setStatsTab] = useState("summary"); 
+      const [historyData, setHistoryData] = useState([]);
+      const [loadingStats, setLoadingStats] = useState(false);
+
+      const [step, setStep] = useState(0); 
+      const [registeredRoles, setRegisteredRoles] = useState({}); 
+      const [assassinateTarget, setAssassinateTarget] = useState("");
+      const [isSubmitting, setIsSubmitting] = useState(false);
+
+      // 💡 補齊被移除的計數常數，供畫面渲染使用
+      const redCount  = cells.filter(c => c === "red").length;
+      const blueCount = cells.filter(c => c === "blue").length;
+
       useEffect(() => {
         if (winner) return;
         const r = cells.filter(c => c === "red").length;
         const b = cells.filter(c => c === "blue").length;
-        if (r >= 3) setWinner("red");
-        else if (b >= 3) setWinner("blue");
+        if (r >= 3) { setWinner("red"); setStep(1); }
+        else if (b >= 3) { setWinner("blue"); setStep(1); }
       }, [cells, winner]);
+
+      useEffect(() => {
+        localStorage.setItem("avalon_players", JSON.stringify(players));
+      }, [players]);
 
       const playAudio = useCallback((path) => {
         if (audioRef.current) audioRef.current.pause();
@@ -146,7 +141,6 @@
         a.play().catch(() => {});
       }, []);
 
-      // 按鈕點擊：用內部 key 查表，和顯示文字完全無關
       const handleButtonClick = useCallback((key) => {
         setActiveKey(key);
         setPlayerConfig(PLAYER_CONFIGS[key]);
@@ -163,37 +157,158 @@
         setCells(prev => { const n = [...prev]; n[i] = color; return n; });
       }, []);
 
+      const toggleShift = (i) => {
+        if (winner) return;
+        setShifts(prev => { const n = [...prev]; n[i] = !n[i]; return n; });
+      };
+
       const handleReset = useCallback(() => {
         setCells(["gray","gray","gray","gray","gray"]);
+        setShifts([false, false, false, false, false]);
         setPlayerConfig(PLAYER_CONFIGS[activeKey]);
         setWinner(null);
         setOpenPickerIndex(null);
+        setStep(0);
+        setRegisteredRoles({});
+        setAssassinateTarget("");
         setAnimKey(k => k + 1);
       }, [activeKey]);
 
-      const redCount  = cells.filter(c => c === "red").length;
-      const blueCount = cells.filter(c => c === "blue").length;
+      const addPlayer = () => {
+        if (!newPlayerName.trim()) return;
+        if (players.includes(newPlayerName.trim())) { alert("玩家名字已存在！"); return; }
+        setPlayers([...players, newPlayerName.trim()]);
+        setNewPlayerName("");
+      };
+
+      const deletePlayer = (name) => {
+        if (confirm(`確定要刪除 ${name} 嗎？`)) {
+          setPlayers(players.filter(p => p !== name));
+        }
+      };
+
+      const fetchHistory = async () => {
+        setLoadingStats(true);
+        try {
+          const snapshot = await db.collection("game_records").orderBy("time", "desc").get();
+          const records = [];
+          snapshot.forEach((doc) => {
+            records.push({ id: doc.id, ...doc.data() });
+          });
+          setHistoryData(records);
+        } catch (e) {
+          console.error("讀取失敗: ", e);
+        }
+        setLoadingStats(false);
+      };
+
+      const openStatsModal = () => {
+        setShowStats(true);
+        fetchHistory();
+      };
+
+      const handleRolesSubmit = () => {
+        if (winner === "blue") {
+          setStep(2);
+        } else {
+          saveGameRecord("壞人贏", false, "");
+        }
+      };
+
+      const handleAssassinationSubmit = () => {
+        const merlinUser = Object.keys(registeredRoles).find(name => registeredRoles[name] === "梅林");
+        const isSuccess = (merlinUser === assassinateTarget && assassinateTarget !== "");
+        const finalWinner = isSuccess ? "壞人贏" : "好人贏";
+        saveGameRecord(finalWinner, isSuccess, assassinateTarget);
+      };
+
+      const saveGameRecord = async (finalResult, isAssassinationSuccessful, assassinatedTarget) => {
+        setIsSubmitting(true);
+        
+        const goodGuys = [];
+        const badGuys = [];
+        Object.entries(registeredRoles).forEach(([name, role]) => {
+          if (role === "X") return;
+          if (ROLES.good.includes(role)) goodGuys.push(name);
+          if (ROLES.bad.includes(role)) badGuys.push(name);
+        });
+
+        const record = {
+          time: new Date().toLocaleString('zh-TW', { timeZone: 'Asia/Taipei' }),
+          who_win: winner === "blue" ? "好人贏" : "壞人贏", 
+          final_result: finalResult, 
+          original_winner: winner === "blue" ? "好人" : "壞人",
+          scores: cells.map(c => c === "blue" ? "藍" : (c === "red" ? "紅" : "")),
+          lancelot_shifts: shifts,
+          total_lancelot_shifts: shifts.filter(Boolean).length,
+          good_guys: goodGuys,
+          bad_guys: badGuys,
+          merlin_player: Object.keys(registeredRoles).find(name => registeredRoles[name] === "梅林") || "X",
+          percival_player: Object.keys(registeredRoles).find(name => registeredRoles[name] === "派西維爾") || "X",
+          assassin_player: Object.keys(registeredRoles).find(name => registeredRoles[name] === "刺客") || "X",
+          assassinated_target: assassinatedTarget || "X",
+          is_assassination_successful: isAssassinationSuccessful,
+          player_roles: registeredRoles
+        };
+
+        try {
+          await db.collection("game_records").add(record);
+          alert("數據成功同步至 Firebase！");
+          handleReset();
+        } catch (e) {
+          console.error("資料寫入失敗: ", e);
+          alert("同步失敗，請檢查網路設定。");
+        } finally {
+          setIsSubmitting(false);
+        }
+      };
+
+      const calculatePlayerStats = () => {
+        const stats = {};
+        players.forEach(p => {
+          stats[p] = { total: 0, win: 0, bluePlay: 0, blueWin: 0, redPlay: 0, redWin: 0 };
+        });
+
+        historyData.forEach(game => {
+          const finalWinArr = game.final_result;
+          Object.entries(game.player_roles || {}).forEach(([name, role]) => {
+            if (role === "X" || !stats[name]) return;
+            stats[name].total += 1;
+            const isGoodRole = ROLES.good.includes(role);
+            if (isGoodRole) {
+              stats[name].bluePlay += 1;
+              if (finalWinArr === "好人贏") {
+                stats[name].win += 1;
+                stats[name].blueWin += 1;
+              }
+            } else {
+              stats[name].redPlay += 1;
+              if (finalWinArr === "壞人贏") {
+                stats[name].win += 1;
+                stats[name].redWin += 1;
+              }
+            }
+          });
+        });
+        return stats;
+      };
+
+      const playerStats = calculatePlayerStats();
 
       return (
         <div style={{ minHeight:"100vh", background:"#09090b", color:"#f4f4f5", fontFamily:"Georgia,serif", display:"flex", flexDirection:"column", alignItems:"center", overflowX:"hidden", position:"relative" }}>
-
-          {/* 背景格線 */}
-          <div style={{
-            pointerEvents:"none", position:"fixed", inset:0, opacity:0.03,
-            backgroundImage:"repeating-linear-gradient(0deg,transparent,transparent 39px,rgba(255,215,0,0.4) 40px),repeating-linear-gradient(90deg,transparent,transparent 39px,rgba(255,215,0,0.4) 40px)"
-          }} />
+          <div style={{ pointerEvents:"none", position:"fixed", inset:0, opacity:0.03, backgroundImage:"repeating-linear-gradient(0deg,transparent,transparent 39px,rgba(255,215,0,0.4) 40px),repeating-linear-gradient(90deg,transparent,transparent 39px,rgba(255,215,0,0.4) 40px)" }} />
           <div style={{ pointerEvents:"none", position:"fixed", top:0, left:"50%", transform:"translateX(-50%)", width:288, height:160, background:"rgba(245,158,11,0.1)", filter:"blur(60px)", borderRadius:"50%" }} />
 
-          {/* ── 標題 ── */}
+          <div className="absolute top-4 right-4 z-30 flex gap-3">
+            <button onClick={openStatsModal} className="text-xl bg-zinc-800 hover:bg-zinc-700 text-amber-400 p-2 rounded-full border border-zinc-700 transition shadow-lg">📈</button>
+            <button onClick={() => setShowSettings(true)} className="text-xl bg-zinc-800 hover:bg-zinc-700 text-amber-400 p-2 rounded-full border border-zinc-700 transition shadow-lg">⚙️</button>
+          </div>
+
           <header style={{ width:"100%", display:"flex", flexDirection:"column", alignItems:"center", paddingTop:32, paddingBottom:16, position:"relative", zIndex:10 }}>
             <div style={{ display:"flex", alignItems:"center", gap:10, marginBottom:4 }}>
               <span style={{ color:"#fbbf24", fontSize:24 }}>♛</span>
-              <h1 style={{
-                fontSize:48, fontWeight:700, letterSpacing:"0.2em", textTransform:"uppercase", margin:0,
-                background:"linear-gradient(135deg,#fbbf24 0%,#f59e0b 45%,#d97706 75%,#fbbf24 100%)",
-                WebkitBackgroundClip:"text", WebkitTextFillColor:"transparent",
-                filter:"drop-shadow(0 0 10px rgba(251,191,36,0.35))",
-              }}>Avalon</h1>
+              <h1 style={{ fontSize:48, fontWeight:700, letterSpacing:"0.2em", textTransform:"uppercase", margin:0, background:"linear-gradient(135deg,#fbbf24 0%,#f59e0b 45%,#d97706 75%,#fbbf24 100%)", WebkitBackgroundClip:"text", WebkitTextFillColor:"transparent", filter:"drop-shadow(0 0 10px rgba(251,191,36,0.35))" }}>Avalon</h1>
               <span style={{ color:"#fbbf24", fontSize:24 }}>♛</span>
             </div>
             <p style={{ color:"#71717a", fontSize:10, letterSpacing:"0.3em", textTransform:"uppercase", margin:0 }}>Game Master Console</p>
@@ -205,157 +320,282 @@
           </header>
 
           <main style={{ width:"100%", maxWidth:420, padding:"0 16px", display:"flex", flexDirection:"column", alignItems:"center", gap:28, position:"relative", zIndex:10, paddingBottom:48 }}>
-
-            {/* ── 按鈕區 ── */}
             <section style={{ width:"100%" }}>
               <p style={{ textAlign:"center", color:"#71717a", fontSize:10, letterSpacing:"0.2em", textTransform:"uppercase", marginBottom:12 }}>⚔ Select Configuration</p>
               <div style={{ display:"grid", gridTemplateColumns:"repeat(4,1fr)", gap:10 }}>
-                {/* 
-                  這裡用 btn.key 做內部邏輯，btn.label 只是顯示用
-                  要改按鈕文字：去上面 BUTTONS 陣列改 label 就好
-                */}
                 {BUTTONS.map(btn => {
                   const isActive = activeKey === btn.key;
                   return (
-                    <button
-                      key={btn.key}
-                      onClick={() => handleButtonClick(btn.key)}
-                      style={{
-                        position:"relative", display:"flex", flexDirection:"column",
-                        alignItems:"center", justifyContent:"center",
-                        height:72, borderRadius:12,
-                        border: isActive ? "2px solid #fbbf24" : "2px solid #3f3f46",
-                        background: isActive ? "rgba(120,53,15,0.3)" : "rgba(24,24,27,0.8)",
-                        color: isActive ? "#fde68a" : "#a1a1aa",
-                        fontSize: btn.label.length > 2 ? 15 : 20,  // 文字較長時縮小字級
-                        fontWeight:700, letterSpacing:"0.05em",
-                        cursor:"pointer", fontFamily:"Georgia,serif",
-                        boxShadow: isActive ? "0 0 20px 3px rgba(251,191,36,0.2)" : "none",
-                        transition:"all 0.2s",
-                        WebkitTapHighlightColor:"transparent",
-                      }}
-                    >
+                    <button key={btn.key} onClick={() => handleButtonClick(btn.key)} style={{ position:"relative", display:"flex", flexDirection:"column", alignItems:"center", justifyContent:"center", height:72, borderRadius:12, border: isActive ? "2px solid #fbbf24" : "2px solid #3f3f46", background: isActive ? "rgba(120,53,15,0.3)" : "rgba(24,24,27,0.8)", color: isActive ? "#fde68a" : "#a1a1aa", fontSize: btn.label.length > 2 ? 15 : 20, fontWeight:700, letterSpacing:"0.05em", cursor:"pointer", boxShadow: isActive ? "0 0 20px 3px rgba(251,191,36,0.2)" : "none", transition:"all 0.2s" }}>
                       <span style={{ fontSize:13, marginBottom:3, opacity: isActive ? 1 : 0.4 }}>🛡</span>
-                      {/* 顯示 label，不影響任何邏輯 */}
                       {btn.label}
-                      {isActive && (
-                        <span style={{
-                          position:"absolute", top:0, left:12, right:12, height:1,
-                          background:"linear-gradient(to right,transparent,rgba(251,191,36,0.6),transparent)"
-                        }} />
-                      )}
+                      {isActive && <span style={{ position:"absolute", top:0, left:12, right:12, height:1, background:"linear-gradient(to right,transparent,rgba(251,191,36,0.6),transparent)" }} />}
                     </button>
                   );
                 })}
               </div>
             </section>
 
-            {/* ── 計分板 ── */}
             <section style={{ width:"100%" }}>
               <p style={{ textAlign:"center", color:"#71717a", fontSize:10, letterSpacing:"0.2em", textTransform:"uppercase", marginBottom:12 }}>⚜ Scoreboard</p>
-
               <div style={{ borderRadius:16, border:"1px solid rgba(63,63,70,0.8)", background:"rgba(24,24,27,0.6)", overflow:"hidden", boxShadow:"0 0 30px rgba(0,0,0,0.5)" }}>
-
-                {/* 第一列：編號 */}
                 <div style={{ display:"grid", gridTemplateColumns:"repeat(5,1fr)", borderBottom:"1px solid rgba(63,63,70,0.5)" }}>
                   {[1,2,3,4,5].map(n => (
                     <div key={n} style={{ padding:"10px 0", textAlign:"center", color:"rgba(251,191,36,0.8)", fontWeight:700, fontSize:16, letterSpacing:"0.2em", borderRight: n<5?"1px solid rgba(63,63,70,0.4)":"none" }}>{n}</div>
                   ))}
                 </div>
 
-                {/* 第二列：人數 */}
                 <div style={{ display:"grid", gridTemplateColumns:"repeat(5,1fr)", borderBottom:"1px solid rgba(63,63,70,0.5)", background:"rgba(39,39,42,0.3)" }}>
                   {playerConfig.map((count, i) => (
-                    <div key={i} style={{ padding:"8px 0", textAlign:"center", borderRight: i<4?"1px solid rgba(63,63,70,0.4)":"none", transition:"all 0.3s" }}>
+                    <div key={i} style={{ padding:"8px 0", textAlign:"center", borderRight: i<4?"1px solid rgba(63,63,70,0.4)":"none" }}>
                       <span style={{ color:"#e4e4e7", fontWeight:500, fontSize:14 }}>{count}</span>
                       <span style={{ color:"#71717a", fontSize:12 }}>人</span>
                     </div>
                   ))}
                 </div>
 
-                {/* 第三列：顏色格子 */}
                 <div style={{ display:"grid", gridTemplateColumns:"repeat(5,1fr)", padding:12, gap:8 }}>
                   {cells.map((color, i) => {
                     const s = COLOR_STYLES[color];
                     const isOpen = openPickerIndex === i;
                     return (
                       <div key={`${animKey}-${i}`} style={{ position:"relative", display:"flex", justifyContent:"center" }}>
-                        <button
-                          onClick={() => handleCellClick(i)}
-                          disabled={!!winner}
-                          style={{
-                            width:"100%", aspectRatio:"1/1", minHeight:52,
-                            borderRadius:12, border:`2px solid ${s.border}`,
-                            background: s.bg, color:"rgba(255,255,255,0.8)",
-                            fontSize:12, fontWeight:700,
-                            cursor: winner ? "not-allowed" : "pointer",
-                            boxShadow: isOpen ? `${s.shadow}, 0 0 0 3px rgba(251,191,36,0.6)` : s.shadow,
-                            transform: isOpen ? "scale(1.08)" : "scale(1)",
-                            opacity: winner ? 0.6 : 1,
-                            transition:"all 0.2s", fontFamily:"Georgia,serif",
-                            WebkitTapHighlightColor:"transparent",
-                          }}
-                        >
+                        <button onClick={() => handleCellClick(i)} disabled={!!winner} style={{ width:"100%", aspectRatio:"1/1", minHeight:52, borderRadius:12, border:`2px solid ${s.border}`, background: s.bg, color:"rgba(255,255,255,0.8)", fontSize:14, fontWeight:700, cursor: winner ? "not-allowed" : "pointer", boxShadow: isOpen ? `${s.shadow}, 0 0 0 3px rgba(251,191,36,0.6)` : s.shadow, transform: isOpen ? "scale(1.08)" : "scale(1)", opacity: winner ? 0.6 : 1, transition:"all 0.2s" }}>
                           {s.label}
                         </button>
                         {isOpen && (
-                          <ColorPicker
-                            cellIndex={i}
-                            currentColor={color}
-                            onSelect={handleColorSelect}
-                            onClose={() => setOpenPickerIndex(null)}
-                          />
+                          <ColorPicker cellIndex={i} currentColor={color} onSelect={handleColorSelect} onClose={() => setOpenPickerIndex(null)} />
                         )}
                       </div>
                     );
                   })}
                 </div>
 
-                {/* 底部計數 */}
+                <div className="px-3 pb-3">
+                  <p className="text-[9px] text-zinc-500 text-center tracking-wider uppercase mb-1">蘭斯洛特變體牌轉換鈕</p>
+                  <div className="grid grid-cols-5 gap-2">
+                    {shifts.map((isShifted, i) => (
+                      <button key={i} onClick={() => toggleShift(i)} disabled={!!winner} className={`py-1.5 rounded-md text-[11px] font-bold border transition duration-200 ${isShifted ? 'bg-amber-600/30 text-amber-400 border-amber-500 shadow-[0_0_10px_rgba(245,158,11,0.2)]' : 'bg-zinc-800/40 text-zinc-500 border-zinc-700/60 hover:border-zinc-500'}`}>
+                        {isShifted ? "轉" : "—"}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+
                 <div style={{ display:"flex", justifyContent:"center", gap:24, padding:"10px 0", background:"rgba(39,39,42,0.2)", borderTop:"1px solid rgba(63,63,70,0.4)" }}>
                   <div style={{ display:"flex", alignItems:"center", gap:6, fontSize:14 }}>
                     <span style={{ width:10, height:10, borderRadius:"50%", background:"#ef4444", display:"inline-block" }} />
-                    <span style={{ color:"#a1a1aa" }}>紅：<span style={{ color:"#f87171", fontWeight:700 }}>{redCount}</span></span>
+                    <span style={{ color:"#a1a1aa" }}>壞人：<span style={{ color:"#f87171", fontWeight:700 }}>{redCount}</span></span>
                   </div>
                   <div style={{ width:1, background:"#3f3f46" }} />
                   <div style={{ display:"flex", alignItems:"center", gap:6, fontSize:14 }}>
                     <span style={{ width:10, height:10, borderRadius:"50%", background:"#3b82f6", display:"inline-block" }} />
-                    <span style={{ color:"#a1a1aa" }}>藍：<span style={{ color:"#60a5fa", fontWeight:700 }}>{blueCount}</span></span>
+                    <span style={{ color:"#a1a1aa" }}>好人：<span style={{ color:"#60a5fa", fontWeight:700 }}>{blueCount}</span></span>
                   </div>
                 </div>
               </div>
-
               <p style={{ color:"#52525b", fontSize:10, textAlign:"center", marginTop:8, letterSpacing:"0.05em" }}>
-                點擊格子選擇顏色 · 達到 3 格判定勝負
+                點擊格子選擇顏色 · 達到 3 格自動結算
               </p>
             </section>
           </main>
 
-          {/* ── 勝利彈窗 ── */}
-          {winner && (
-            <div className="anim-fade" style={{ position:"fixed", inset:0, zIndex:50, display:"flex", alignItems:"center", justifyContent:"center", background:"rgba(0,0,0,0.75)", backdropFilter:"blur(4px)", padding:"0 24px" }}>
-              <div className="anim-pop" style={{
-                position:"relative", display:"flex", flexDirection:"column", alignItems:"center",
-                gap:20, padding:"36px 32px", borderRadius:16,
-                border:`2px solid ${winner==="red"?"#ef4444":"#3b82f6"}`,
-                background:"#18181b", width:"100%", maxWidth:300,
-                boxShadow: winner==="red" ? "0 0 50px rgba(239,68,68,0.35)" : "0 0 50px rgba(59,130,246,0.35)",
-              }}>
-                <div style={{ position:"absolute", top:0, left:"50%", transform:"translateX(-50%)", width:144, height:4, borderRadius:"0 0 4px 4px", background: winner==="red"?"#ef4444":"#3b82f6" }} />
-                <div style={{ fontSize:56, filter:`drop-shadow(0 0 12px ${winner==="red"?"rgba(239,68,68,0.7)":"rgba(59,130,246,0.7)"})` }}>♛</div>
-                <div style={{ textAlign:"center" }}>
-                  <p style={{ color:"#71717a", fontSize:10, letterSpacing:"0.3em", textTransform:"uppercase", margin:"0 0 6px" }}>Victory</p>
-                  <h2 style={{ fontSize:28, fontWeight:700, letterSpacing:"0.05em", margin:0, color: winner==="red"?"#f87171":"#60a5fa" }}>
-                    {winner==="red" ? "紅方勝利！！！" : "藍方勝利！！！"}
-                  </h2>
+          {winner && step > 0 && (
+            <div className="anim-fade" style={{ position:"fixed", inset:0, zIndex:50, display:"flex", alignItems:"center", justifyContent:"center", background:"rgba(0,0,0,0.8)", backdropFilter:"blur(6px)", padding:"0 16px" }}>
+              <div className="anim-pop no-scrollbar" style={{ position:"relative", display:"flex", flexDirection:"column", gap:20, padding:"32px 24px", borderRadius:16, border:`2px solid ${winner==="red"?"#ef4444":"#3b82f6"}`, background:"#141417", width:"100%", maxWidth:360, maxHeight:"90vh", overflowY:"auto", boxShadow: winner==="red" ? "0 0 50px rgba(239,68,68,0.3)" : "0 0 50px rgba(59,130,246,0.3)" }}>
+                {step === 1 && (
+                  <div className="w-100 flex flex-col items-center gap-4">
+                    <div className="text-5xl" style={{ filter: `drop-shadow(0 0 12px ${winner==='red'?'#ef4444':'#3b82f6'})` }}>♛</div>
+                    <div className="text-center">
+                      <p className="text-xs tracking-[0.3em] uppercase text-zinc-500 mb-1">Victory</p>
+                      <h2 className="text-3xl font-bold" style={{ color: winner==='red'?'#f87171':'#60a5fa' }}>
+                        {winner === "red" ? "壞人陣營勝利！！！" : "好人陣營勝利！！！"}
+                      </h2>
+                    </div>
+                    <div className="w-24 h-[1px] my-2" style={{ background: winner==='red' ? 'linear-gradient(to right,transparent,#ef4444,transparent)' : 'linear-gradient(to right,transparent,#3b82f6,transparent)' }} />
+                    
+                    <div className="w-full mt-2">
+                      <p className="text-xs text-zinc-400 font-bold mb-3 text-center border-b border-zinc-800 pb-2">📋 請登記玩家對應角色（選填）</p>
+                      <div className="flex flex-col gap-3 max-h-[35vh] overflow-y-auto pr-1 no-scrollbar">
+                        {players.map((name) => (
+                          <div key={name} className="flex justify-between items-center bg-zinc-900/60 p-2 rounded-lg border border-zinc-800/80">
+                            <span className="text-sm font-medium text-zinc-300 ml-1">{name}</span>
+                            <select 
+                              value={registeredRoles[name] || "X"} 
+                              onChange={(e) => setRegisteredRoles({...registeredRoles, [name]: e.target.value})}
+                              className="bg-zinc-800 text-zinc-200 border border-zinc-700 text-xs rounded-md px-2 py-1 focus:outline-none focus:border-amber-500 w-36"
+                            >
+                              {ALL_ROLES.map(role => (
+                                <option key={role} value={role}>{role}</option>
+                              ))}
+                            </select>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                    <button onClick={handleRolesSubmit} className="w-full bg-amber-600 hover:bg-amber-500 active:scale-95 text-zinc-900 font-bold py-3 rounded-xl tracking-wider text-sm transition mt-2 shadow-lg">Continue</button>
+                  </div>
+                )}
+
+                {step === 2 && (
+                  <div className="w-100 flex flex-col items-center gap-4">
+                    <div className="text-5xl text-red-500 filter drop-shadow-[0_0_10px_rgba(239,68,68,0.5)]">🎯</div>
+                    <div className="text-center">
+                      <h3 className="text-xl font-bold text-red-400 tracking-wide">進入刺殺梅林環節</h3>
+                      <p className="text-xs text-zinc-500 mt-1">若刺客成功選中梅林，勝負將會翻轉為壞人贏</p>
+                    </div>
+                    
+                    <div className="w-full my-4 bg-zinc-900/80 p-4 rounded-xl border border-zinc-800 text-center">
+                      <label className="block text-xs font-bold text-zinc-400 mb-2 uppercase tracking-wider">🗡️ 請選擇刺客刺殺的對象：</label>
+                      <select
+                        value={assassinateTarget}
+                        onChange={(e) => setAssassinateTarget(e.target.value)}
+                        className="w-full max-w-[240px] bg-zinc-800 text-zinc-200 border border-zinc-700 rounded-lg p-2 text-sm focus:outline-none focus:border-red-500 mx-auto block"
+                      >
+                        <option value="">-- 請選擇一名玩家 --</option>
+                        {players.map(p => (
+                          <option key={p} value={p}>{p}</option>
+                        ))}
+                      </select>
+                    </div>
+                    <button onClick={handleAssassinationSubmit} disabled={isSubmitting} className="w-full bg-red-600 hover:bg-red-500 active:scale-95 text-white font-bold py-3 rounded-xl tracking-wider text-sm transition disabled:opacity-50">
+                      {isSubmitting ? "資料上傳中..." : "確認刺殺，結算戰績"}
+                    </button>
+                  </div>
+                )}
+              </div>
+            </div>
+          )}
+
+          {showSettings && (
+            <div className="anim-fade fixed inset-0 z-50 flex items-center justify-center bg-black/80 backdrop-blur-sm p-4">
+              <div className="anim-pop bg-zinc-900 border border-zinc-800 p-6 rounded-2xl w-full max-w-sm flex flex-col gap-4 max-h-[85vh]">
+                <div className="flex justify-between items-center border-b border-zinc-800 pb-2">
+                  <h3 className="text-lg font-bold text-amber-400">🛠️ 成員名單管理</h3>
+                  <button onClick={() => setShowSettings(false)} className="text-zinc-500 hover:text-white font-bold">✕</button>
                 </div>
-                <div style={{ width:96, height:1, background: winner==="red" ? "linear-gradient(to right,transparent,#ef4444,transparent)" : "linear-gradient(to right,transparent,#3b82f6,transparent)" }} />
-                <button
-                  onClick={handleReset}
-                  style={{ display:"flex", alignItems:"center", gap:8, padding:"12px 28px", borderRadius:12, border:"1px solid #52525b", background:"#27272a", color:"#e4e4e7", fontSize:15, fontWeight:500, letterSpacing:"0.1em", cursor:"pointer", fontFamily:"Georgia,serif", minHeight:48, WebkitTapHighlightColor:"transparent" }}
-                >
-                  ↺ 重新開始
-                </button>
+                <div className="flex gap-2">
+                  <input type="text" placeholder="輸入新玩家名字" value={newPlayerName} onChange={(e) => setNewPlayerName(e.target.value)} className="flex-1 bg-zinc-800 border border-zinc-700 rounded-xl px-3 py-2 text-sm text-zinc-200 focus:outline-none focus:border-amber-500" />
+                  <button onClick={addPlayer} className="bg-amber-600 hover:bg-amber-500 text-zinc-900 font-bold px-4 py-2 rounded-xl text-sm transition">+</button>
+                </div>
+                <div className="flex-1 overflow-y-auto pr-1 flex flex-col gap-2 no-scrollbar" style={{ minHeight: "200px" }}>
+                  {players.map(p => (
+                    <div key={p} className="flex justify-between items-center bg-zinc-800/50 p-2.5 rounded-xl border border-zinc-800">
+                      <span className="text-sm font-medium text-zinc-300">{p}</span>
+                      <button onClick={() => deletePlayer(p)} className="text-xs text-red-400 hover:text-red-500 px-2 py-1 rounded bg-zinc-800 border border-zinc-700 transition">刪除</button>
+                    </div>
+                  ))}
+                </div>
+                <button onClick={() => setShowSettings(false)} className="w-full bg-zinc-800 border border-zinc-700 hover:bg-zinc-700 text-zinc-300 py-2.5 rounded-xl text-sm font-medium">關閉</button>
+              </div>
+            </div>
+          )}
+
+          {showStats && (
+            <div className="anim-fade fixed inset-0 z-50 flex items-center justify-center bg-black/80 backdrop-blur-md p-3">
+              <div className="anim-pop bg-zinc-950 border border-zinc-800 p-5 rounded-2xl w-full max-w-4xl flex flex-col gap-4 h-[88vh] text-zinc-200">
+                <div className="flex justify-between items-center border-b border-zinc-800 pb-3">
+                  <div className="flex items-center gap-4">
+                    <h3 className="text-xl font-bold text-amber-400 tracking-wider">📈 阿瓦隆戰績覆盤中心</h3>
+                    <div className="flex bg-zinc-900 rounded-lg p-0.5 border border-zinc-800 text-xs">
+                      <button onClick={() => setStatsTab("summary")} className={`px-3 py-1.5 rounded-md font-medium transition ${statsTab === 'summary' ? 'bg-amber-600 text-zinc-900 font-bold' : 'text-zinc-400 hover:text-zinc-200'}`}>個人勝率表</button>
+                      <button onClick={() => setStatsTab("history")} className={`px-3 py-1.5 rounded-md font-medium transition ${statsTab === 'history' ? 'bg-amber-600 text-zinc-900 font-bold' : 'text-zinc-400 hover:text-zinc-200'}`}>詳細對戰紀錄</button>
+                    </div>
+                  </div>
+                  <button onClick={() => setShowStats(false)} className="text-zinc-500 hover:text-white text-lg font-bold">✕</button>
+                </div>
+
+                <div className="flex-1 overflow-auto no-scrollbar border border-zinc-800/80 bg-zinc-900/20 rounded-xl">
+                  {loadingStats ? (
+                    <div className="h-full flex items-center justify-center text-zinc-500 text-sm">📡 正在與 Avalon Firebase 同步數據中...</div>
+                  ) : historyData.length === 0 ? (
+                    <div className="h-full flex items-center justify-center text-zinc-500 text-sm">暫無遊戲數據，快去打一局覆盤吧！</div>
+                  ) : statsTab === "summary" ? (
+                    <div className="min-w-[700px] p-2 text-xs">
+                      <table className="w-full text-center border-collapse">
+                        <thead>
+                          <tr className="bg-zinc-900 text-zinc-400 font-bold border-b border-zinc-800 uppercase">
+                            <th className="py-3 px-2 text-left sticky left-0 bg-zinc-950 min-w-[120px] text-amber-500">Name</th>
+                            <th className="py-3 px-2 border-l border-zinc-800">Total Played</th>
+                            <th className="py-3 px-2 border-l border-zinc-800">Win</th>
+                            <th className="py-3 px-2 border-l border-zinc-800 text-red-400">TotalWin Rate</th>
+                            <th className="py-3 px-2 border-l border-zinc-800 text-sky-400">Blue Win Rate</th>
+                            <th className="py-3 px-2 border-l border-zinc-800 text-amber-500">Red Win Rate</th>
+                          </tr>
+                        </thead>
+                        <tbody className="divide-y divide-zinc-800/60 font-medium">
+                          {players.map(name => {
+                            const p = playerStats[name] || { total: 0, win: 0, bluePlay: 0, blueWin: 0, redPlay: 0, redWin: 0 };
+                            const totalWR = p.total > 0 ? ((p.win / p.total) * 100).toFixed(2) + "%" : "0.00%";
+                            const blueWR = p.bluePlay > 0 ? ((p.blueWin / p.bluePlay) * 100).toFixed(2) + "%" : "0.00%";
+                            const redWR = p.redPlay > 0 ? ((p.redWin / p.redPlay) * 100).toFixed(2) + "%" : "0.00%";
+                            return (
+                              <tr key={name} className="hover:bg-zinc-900/40 transition">
+                                <td className="py-3 px-2 text-left font-bold text-zinc-300 sticky left-0 bg-zinc-950 border-r border-zinc-800">{name}</td>
+                                <td className="py-3 px-2 text-zinc-400 font-bold">{p.total}</td>
+                                <td className="py-3 px-2 text-emerald-400">{p.win}</td>
+                                <td className="py-3 px-2 font-bold bg-red-950/20 text-red-400">{totalWR}</td>
+                                <td className="py-3 px-2 font-bold bg-sky-950/20 text-sky-400">{blueWR}</td>
+                                <td className="py-3 px-2 font-bold bg-amber-950/20 text-amber-500">{redWR}</td>
+                              </tr>
+                            );
+                          })}
+                        </tbody>
+                      </table>
+                    </div>
+                  ) : (
+                    <div className="min-w-[950px] p-2 text-[11px]">
+                      <table className="w-full text-center border-collapse">
+                        <thead>
+                          <tr className="bg-zinc-900 text-zinc-400 font-bold border-b border-zinc-800">
+                            <th className="py-2.5 px-2 text-left text-zinc-400">Time</th>
+                            <th className="py-2.5 px-2 border-l border-zinc-800">Who win</th>
+                            {players.map(p => (
+                              <th key={p} className="py-2.5 px-1 border-l border-zinc-800 text-[10px] min-w-[75px]">{p}</th>
+                            ))}
+                            <th className="py-2.5 px-2 border-l border-zinc-800 text-red-400">誰被刺</th>
+                            <th className="py-2.5 px-1 border-l border-zinc-800 min-w-[130px]">1  |  2  |  3  |  4  |  5</th>
+                          </tr>
+                        </thead>
+                        <tbody className="divide-y divide-zinc-800/80 font-medium text-zinc-300">
+                          {historyData.map((game, idx) => (
+                            <tr key={game.id || idx} className="hover:bg-zinc-900/40 transition">
+                              <td className="py-2.5 px-2 text-left text-zinc-500 text-[10px]">{game.time?.split(" ")[0] || "—"}</td>
+                              <td className={`py-2.5 px-2 font-bold ${game.final_result==='好人贏'?'text-sky-400':'text-red-400'}`}>{game.final_result}</td>
+                              {players.map(p => {
+                                const role = game.player_roles?.[p] || "X";
+                                return (
+                                  <td key={p} className={`py-2.5 px-1 border-l border-zinc-900 text-[10.5px] ${role === 'X' ? 'text-zinc-600 font-light' : (ROLES.good.includes(role)?'text-sky-400/80':'text-red-400/80')}`}>
+                                    {role}
+                                  </td>
+                                );
+                              })}
+                              <td className="py-2.5 px-2 border-l border-zinc-900 text-rose-300 font-semibold">{game.assassinated_target === "X" ? "—" : game.assassinated_target}</td>
+                              <td className="py-2.5 px-1 border-l border-zinc-900">
+                                <div className="flex justify-center items-center gap-1">
+                                  {(game.scores || ["","","","",""]).map((scoreColor, sIdx) => {
+                                    const isShifted = game.lancelot_shifts?.[sIdx];
+                                    return (
+                                      <div key={sIdx} className="relative flex flex-col items-center">
+                                        <span className={`w-4 h-4 rounded-sm block text-[9px] leading-4 font-black text-white ${scoreColor==='藍'?'bg-blue-600':(scoreColor==='紅'?'bg-red-600':'bg-zinc-800')}`}>
+                                          {scoreColor ? scoreColor : "—"}
+                                        </span>
+                                        {isShifted && <span className="text-[7px] text-amber-500 absolute -bottom-2.5 scale-90 font-bold">轉</span>}
+                                      </div>
+                                    )
+                                  })}
+                                </div>
+                              </td>
+                            </tr>
+                          ))}
+                        </tbody>
+                      </table>
+                    </div>
+                  )}
+                </div>
+                <div className="flex justify-end pt-1">
+                  <button onClick={() => setShowStats(false)} className="bg-zinc-800 border border-zinc-700 hover:bg-zinc-700 text-zinc-300 px-5 py-2 rounded-xl text-xs font-medium transition">關閉統計中心</button>
+                </div>
               </div>
             </div>
           )}
